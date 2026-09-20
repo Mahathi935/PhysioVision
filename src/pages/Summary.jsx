@@ -19,7 +19,7 @@ export default function Summary() {
     if (!data || data.repCount === undefined) return;
     saveSession({
       date: new Date().toISOString(),
-      exercise: 'Lying Leg Raise',
+      exercise: 'Leg Raise',
       repCount: data.repCount,
       repGoal: data.repGoal,
       goodReps: data.goodReps,
@@ -103,7 +103,7 @@ export default function Summary() {
           <div className="flex items-center justify-between">
             <div>
               <p className="section-label mb-1">Exercise</p>
-              <p className="font-semibold text-text-primary">Lying Leg Raise</p>
+              <p className="font-semibold text-text-primary">Leg Raise</p>
             </div>
             <div className="text-right">
               <p className="section-label mb-1">Duration</p>

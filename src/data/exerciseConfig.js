@@ -3,8 +3,8 @@
 
 export const EXERCISES = {
   lying_leg_raise: {
-    id: 'lying_leg_raise',
-    name: 'Lying Leg Raise',
+    id: 'leg_raise',
+    name: 'Leg Raise',
     description: 'Strengthens hip flexors and lower abdominals while lying flat.',
     cameraInstructions:
       'Position the camera to your side so your shoulder, hip, knee, and ankle are all visible in profile.',

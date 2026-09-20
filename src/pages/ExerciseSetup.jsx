@@ -55,7 +55,7 @@ export default function ExerciseSetup({ config, setConfig }) {
           <div className="flex items-start justify-between">
             <div>
               <span className="section-label block mb-1">Selected Exercise</span>
-              <h2 className="text-xl font-bold text-text-primary">Lying Leg Raise</h2>
+              <h2 className="text-xl font-bold text-text-primary">Leg Raise</h2>
               <p className="text-text-secondary text-sm mt-1">{exercise.jointDescription}</p>
             </div>
             <div className="px-3 py-1 bg-accent-500/10 border border-accent-500/20 rounded-lg">
