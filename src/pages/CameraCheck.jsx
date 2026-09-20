@@ -1,0 +1,284 @@
+/**
+ * CameraCheck.jsx — Camera and landmark visibility check page
+ */
+
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FiCheck, FiX, FiChevronLeft, FiRefreshCw, FiAlertTriangle } from 'react-icons/fi';
+import { useMediaPipe, MediaPipeStatus } from '../hooks/useMediaPipe';
+import { detectBestSide, isPersonDetected } from '../logic/poseAnalysis';
+import { checkLandmarkConfidence, VisibilityLevel, ConfidenceLevel } from '../logic/confidenceCheck';
+import CameraView from '../components/CameraView';
+
+const LANDMARK_LABELS = ['shoulder', 'hip', 'knee', 'ankle'];
+
+function LandmarkStatusRow({ name, level }) {
+  const isVisible = level === VisibilityLevel.HIGH || level === VisibilityLevel.MEDIUM;
+  const isHigh = level === VisibilityLevel.HIGH;
+
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-surface-500 last:border-0">
+      <div className="flex items-center gap-3">
+        <div className={`w-2 h-2 rounded-full ${
+          isHigh ? 'bg-accent-400' : isVisible ? 'bg-yellow-400' : 'bg-red-400'
+        }`} />
+        <span className="text-sm text-text-primary capitalize font-medium">{name}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        {isHigh ? (
+          <>
+            <FiCheck className="w-4 h-4 text-accent-400" />
+            <span className="text-xs text-accent-400 font-medium">Visible</span>
+          </>
+        ) : isVisible ? (
+          <>
+            <FiAlertTriangle className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="text-xs text-yellow-400 font-medium">Low</span>
+          </>
+        ) : (
+          <>
+            <FiX className="w-4 h-4 text-red-400" />
+            <span className="text-xs text-red-400 font-medium">Not visible</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function CameraCheck() {
+  const navigate = useNavigate();
+  const videoRef = useRef(null);
+  const [landmarks, setLandmarks] = useState(null);
+  const [confidenceData, setConfidenceData] = useState(null);
+  const [activeSide, setActiveSide] = useState('left');
+  const [personDetected, setPersonDetected] = useState(false);
+
+  const handleLandmarks = useCallback((lms) => {
+    setLandmarks(lms);
+
+    if (!lms || !isPersonDetected(lms)) {
+      setPersonDetected(false);
+      setConfidenceData(null);
+      return;
+    }
+
+    setPersonDetected(true);
+    const best = detectBestSide(lms);
+    if (best) {
+      setActiveSide(best.side);
+      setConfidenceData(checkLandmarkConfidence(best.landmarks));
+    }
+  }, []);
+
+  const { status, error, isDemoMode, activateDemoMode, reinitialize } = useMediaPipe({
+    videoRef,
+    enabled: true,
+    onLandmarks: handleLandmarks,
+  });
+
+  const isReady =
+    confidenceData?.overallConfidence === ConfidenceLevel.HIGH && personDetected;
+
+  const statusInfo = (() => {
+    if (status === MediaPipeStatus.LOADING_MODEL) {
+      return {
+        label: 'LOADING',
+        message: 'Loading pose detection model…',
+        color: 'text-blue-400',
+        bg: 'bg-blue-500/10 border-blue-500/20',
+      };
+    }
+    if (status === MediaPipeStatus.REQUESTING_CAMERA) {
+      return {
+        label: 'CAMERA',
+        message: 'Requesting camera access…',
+        color: 'text-blue-400',
+        bg: 'bg-blue-500/10 border-blue-500/20',
+      };
+    }
+    if (status === MediaPipeStatus.ERROR) {
+      return {
+        label: 'ERROR',
+        message: error || 'Camera initialization failed.',
+        color: 'text-red-400',
+        bg: 'bg-red-500/10 border-red-500/20',
+      };
+    }
+    if (isDemoMode) {
+      return {
+        label: 'DEMO MODE',
+        message: 'Demo mode active — skipping camera check.',
+        color: 'text-yellow-400',
+        bg: 'bg-yellow-500/10 border-yellow-500/20',
+      };
+    }
+    if (!personDetected) {
+      return {
+        label: 'SCANNING',
+        message: 'Looking for a person. Please step into frame.',
+        color: 'text-text-muted',
+        bg: 'bg-surface-600 border-surface-500',
+      };
+    }
+    if (isReady) {
+      return {
+        label: 'READY',
+        message: confidenceData?.message || 'All required landmarks visible.',
+        color: 'text-accent-400',
+        bg: 'bg-accent-500/10 border-accent-500/20',
+      };
+    }
+    return {
+      label: 'REPOSITION',
+      message: confidenceData?.message || 'Please adjust your position.',
+      color: 'text-yellow-400',
+      bg: 'bg-yellow-500/10 border-yellow-500/20',
+    };
+  })();
+
+  return (
+    <div className="min-h-screen bg-surface-800 pt-24 pb-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in">
+
+        <button
+          onClick={() => navigate('/setup')}
+          className="flex items-center gap-2 text-text-secondary hover:text-text-primary text-sm mb-6 transition-colors"
+        >
+          <FiChevronLeft className="w-4 h-4" />
+          Back to Setup
+        </button>
+
+        <div className="mb-6">
+          <span className="section-label block mb-2">Step 2 of 3</span>
+          <h1 className="text-3xl font-bold text-text-primary">Camera Check</h1>
+          <p className="text-text-secondary mt-2">
+            Verify all required landmarks are visible before starting.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-5 gap-5">
+
+          {/* Camera feed — 3/5 width */}
+          <div className="md:col-span-3">
+            <CameraView
+              videoRef={videoRef}
+              landmarks={landmarks}
+              activeSide={activeSide}
+              angle={null}
+              className="w-full"
+              demoMode={isDemoMode}
+            />
+
+            {/* Status message */}
+            <div className={`mt-3 p-3 rounded-xl border ${statusInfo.bg} flex items-center gap-3`}>
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                isReady ? 'bg-accent-400' :
+                status === MediaPipeStatus.ERROR ? 'bg-red-400' :
+                'bg-yellow-400 animate-pulse'
+              }`} />
+              <div>
+                <span className={`text-xs font-bold uppercase tracking-wider ${statusInfo.color}`}>
+                  {statusInfo.label}
+                </span>
+                <p className="text-sm text-text-secondary mt-0.5">{statusInfo.message}</p>
+              </div>
+            </div>
+
+            {/* Error actions */}
+            {status === MediaPipeStatus.ERROR && (
+              <div className="mt-3 flex gap-3">
+                <button onClick={reinitialize} className="btn-secondary flex items-center gap-2 text-sm flex-1">
+                  <FiRefreshCw className="w-4 h-4" />
+                  Retry Camera
+                </button>
+                <button onClick={activateDemoMode} className="btn-secondary flex items-center gap-2 text-sm flex-1 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10">
+                  Use Demo Mode
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Landmark checklist — 2/5 width */}
+          <div className="md:col-span-2 space-y-4">
+
+            {/* Person detected */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="section-label">Person Detection</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  personDetected ? 'bg-accent-500/20' : 'bg-surface-600'
+                }`}>
+                  {personDetected
+                    ? <FiCheck className="w-4 h-4 text-accent-400" />
+                    : <FiX className="w-4 h-4 text-text-muted" />
+                  }
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-primary">
+                    {personDetected ? 'Person detected' : 'No person detected'}
+                  </p>
+                  {personDetected && (
+                    <p className="text-xs text-text-muted capitalize">
+                      Tracking {activeSide} side
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Landmark statuses */}
+            <div className="card p-4">
+              <span className="section-label block mb-3">Required Landmarks</span>
+              {LANDMARK_LABELS.map((name) => (
+                <LandmarkStatusRow
+                  key={name}
+                  name={name}
+                  level={
+                    confidenceData?.statuses?.[name] || VisibilityLevel.ABSENT
+                  }
+                />
+              ))}
+            </div>
+
+            {/* Confidence */}
+            <div className="card p-4">
+              <span className="section-label block mb-2">Overall Confidence</span>
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${
+                confidenceData?.overallConfidence === ConfidenceLevel.HIGH
+                  ? 'bg-accent-500/20 text-accent-300 border border-accent-500/30'
+                  : confidenceData?.overallConfidence === ConfidenceLevel.MEDIUM
+                  ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                  : 'bg-surface-600 text-text-muted border border-surface-500'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  confidenceData?.overallConfidence === ConfidenceLevel.HIGH ? 'bg-accent-400' :
+                  confidenceData?.overallConfidence === ConfidenceLevel.MEDIUM ? 'bg-yellow-400' :
+                  'bg-surface-400'
+                }`} />
+                {confidenceData?.overallConfidence || 'LOW'}
+              </div>
+            </div>
+
+            {/* Start button */}
+            <button
+              onClick={() => navigate('/session')}
+              disabled={!isReady && !isDemoMode}
+              className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isDemoMode ? 'Start (Demo Mode)' : 'Start Exercise →'}
+            </button>
+
+            {!isReady && !isDemoMode && status === MediaPipeStatus.RUNNING && (
+              <p className="text-xs text-text-muted text-center">
+                Adjust camera until all landmarks show as visible
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
