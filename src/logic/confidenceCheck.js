@@ -2,6 +2,8 @@
  * confidenceCheck.js
  * Checks landmark visibility/confidence and determines overall tracking quality.
  * SAFETY CRITICAL: Low confidence = no form evaluation.
+ *
+ * Works generically for any exercise landmark set (leg raise, wrist flexion, etc.)
  */
 
 import { VISIBILITY_THRESHOLDS } from '../data/exerciseConfig';
@@ -39,28 +41,22 @@ export function getLandmarkVisibility(lm) {
 }
 
 /**
- * Check all required landmarks for an exercise side.
- * Returns per-landmark status and overall confidence.
- *
- * @param {Object} landmarks - { shoulder, hip, knee, ankle } — each a MediaPipe landmark or null
+ * Generic confidence check for any set of landmarks.
+ * @param {Object} landmarks - keyed object of MediaPipe landmarks (values may be null)
  * @returns {{ statuses, overallConfidence, allVisible, message }}
  */
-export function checkLandmarkConfidence(landmarks) {
-  const { shoulder, hip, knee, ankle } = landmarks;
-
-  const statuses = {
-    shoulder: getLandmarkVisibility(shoulder),
-    hip: getLandmarkVisibility(hip),
-    knee: getLandmarkVisibility(knee),
-    ankle: getLandmarkVisibility(ankle),
-  };
+export function checkLandmarkConfidenceByKeys(landmarks) {
+  const statuses = {};
+  for (const [key, lm] of Object.entries(landmarks)) {
+    statuses[key] = getLandmarkVisibility(lm);
+  }
 
   const levels = Object.values(statuses);
 
   const hasAbsent = levels.some((l) => l === VisibilityLevel.ABSENT);
-  const hasLow = levels.some((l) => l === VisibilityLevel.LOW);
+  const hasLow    = levels.some((l) => l === VisibilityLevel.LOW);
   const hasMedium = levels.some((l) => l === VisibilityLevel.MEDIUM);
-  const allHigh = levels.every((l) => l === VisibilityLevel.HIGH);
+  const allHigh   = levels.every((l) => l === VisibilityLevel.HIGH);
 
   const allVisible = !hasAbsent && !hasLow;
 
@@ -75,17 +71,21 @@ export function checkLandmarkConfidence(landmarks) {
     message = 'Patient detected. Required landmarks visible.';
   } else if (!hasAbsent && hasMedium) {
     overallConfidence = ConfidenceLevel.MEDIUM;
-    message = 'Landmarks partially visible. Please ensure full body is in frame.';
+    message = 'Landmarks partially visible. Please ensure all joints are in frame.';
   } else {
     overallConfidence = ConfidenceLevel.LOW;
 
-    // Provide specific repositioning guidance
     const missing = Object.entries(statuses)
       .filter(([, v]) => v === VisibilityLevel.LOW || v === VisibilityLevel.ABSENT)
       .map(([k]) => k);
 
+    // Provide targeted repositioning guidance
     if (missing.includes('ankle') || missing.includes('knee')) {
       message = 'Please move the camera so your knee and ankle are visible.';
+    } else if (missing.includes('index_finger') || missing.includes('wrist')) {
+      message = 'Please adjust camera so your wrist and fingers are fully visible.';
+    } else if (missing.includes('elbow')) {
+      message = 'Please move the camera to show your elbow.';
     } else if (missing.includes('shoulder')) {
       message = 'Please move farther from the camera so your shoulder is visible.';
     } else {
@@ -94,6 +94,14 @@ export function checkLandmarkConfidence(landmarks) {
   }
 
   return { statuses, overallConfidence, allVisible, message };
+}
+
+/**
+ * Backwards-compatible wrapper for leg-raise (shoulder/hip/knee/ankle) landmarks.
+ * @param {Object} landmarks - { shoulder, hip, knee, ankle }
+ */
+export function checkLandmarkConfidence(landmarks) {
+  return checkLandmarkConfidenceByKeys(landmarks);
 }
 
 /**

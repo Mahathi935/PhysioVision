@@ -3,8 +3,9 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { FiPlay, FiClock, FiSettings, FiAlertCircle, FiActivity, FiShield } from 'react-icons/fi';
+import { FiPlay, FiClock, FiAlertCircle, FiActivity, FiShield } from 'react-icons/fi';
 import { loadSessions } from '../utils/storage';
+import { EXERCISES } from '../data/exerciseConfig';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ export default function Dashboard() {
             </div>
             <h2 className="text-xl font-bold text-text-primary mb-2">Start Exercise</h2>
             <p className="text-text-secondary text-sm leading-relaxed">
-              Begin a monitored session for Lying Leg Raise.
+              Begin a monitored session for Leg Raise or Wrist Flexion.
               Configure your physiotherapist's target parameters and start tracking.
             </p>
             <div className="mt-4 flex items-center gap-2 text-accent-400 text-sm font-medium">
@@ -107,23 +108,27 @@ export default function Dashboard() {
 
         </div>
 
-        {/* Exercise info card */}
+        {/* Available exercises info */}
         <div className="mt-5 card p-6 animate-fade-in">
           <div className="flex items-center gap-3 mb-4">
             <FiActivity className="w-5 h-5 text-accent-400" />
-            <h3 className="font-semibold text-text-primary">Available Exercise</h3>
+            <h3 className="font-semibold text-text-primary">Available Exercises</h3>
           </div>
-          <div className="flex items-start gap-4">
-            <div className="flex-1">
-              <p className="font-medium text-text-primary">Lying Leg Raise</p>
-              <p className="text-text-secondary text-sm mt-1 leading-relaxed">
-                Monitors hip flexion angle (Shoulder → Hip → Knee) during supine leg raises.
-                Requires a side-view camera position.
-              </p>
-            </div>
-            <div className="flex-shrink-0 px-3 py-1 bg-accent-500/10 rounded-lg border border-accent-500/20">
-              <span className="text-accent-400 text-xs font-semibold">MVP Exercise</span>
-            </div>
+          <div className="space-y-4">
+            {Object.values(EXERCISES).map((ex, i) => (
+              <div key={ex.id} className={`flex items-start gap-4 ${i > 0 ? 'pt-4 border-t border-surface-500' : ''}`}>
+                <div className="flex-1">
+                  <p className="font-medium text-text-primary">{ex.name}</p>
+                  <p className="text-text-secondary text-sm mt-1 leading-relaxed">{ex.description}</p>
+                  <p className="text-text-muted text-xs mt-1">
+                    <span className="text-accent-400">Tracks: </span>{ex.jointDescription}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 px-3 py-1 bg-accent-500/10 rounded-lg border border-accent-500/20">
+                  <span className="text-accent-400 text-xs font-semibold">Available</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

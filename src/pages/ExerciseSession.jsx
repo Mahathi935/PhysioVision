@@ -86,11 +86,30 @@ export default function ExerciseSession({ config }) {
     formStatus,
     processLandmarks,
     getSessionData,
+    isComplete,
   } = useExerciseSession({
     config,
     isActive: sessionActive,
     isDemoMode,
   });
+
+  // Auto-stop: when all reps are done, wait 1.5 s then navigate to summary
+  const autoStopRef = useRef(null);
+  useEffect(() => {
+    if (isComplete && sessionActive && !autoStopRef.current) {
+      autoStopRef.current = setTimeout(() => {
+        handleEndSession();
+      }, 1500);
+    }
+    return () => {
+      if (autoStopRef.current) {
+        clearTimeout(autoStopRef.current);
+        autoStopRef.current = null;
+      }
+    };
+  // handleEndSession is stable via useCallback
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete, sessionActive]);
 
   // Start the session once the camera is running
   useEffect(() => {
@@ -144,7 +163,7 @@ export default function ExerciseSession({ config }) {
             <FiActivity className="w-4 h-4 text-white" />
           </div>
           <div>
-            <span className="text-xs text-text-muted font-medium uppercase tracking-wider block leading-none">Lying Leg Raise</span>
+            <span className="text-xs text-text-muted font-medium uppercase tracking-wider block leading-none">{config?.exerciseName || 'Exercise'}</span>
             <span className="text-text-primary font-semibold text-sm">
               {sessionActive ? 'Session Active' : 'Starting…'}
             </span>

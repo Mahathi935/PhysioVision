@@ -3,17 +3,17 @@
  * Core session management hook.
  *
  * Integrates:
- * - Landmark processing (poseAnalysis)
+ * - Landmark processing (poseAnalysis) — dispatched by exerciseId
  * - Confidence checking (confidenceCheck)
  * - Angle calculation (angleCalculation)
- * - State machine (exerciseStateMachine)
+ * - State machine (exerciseStateMachine) — raise or lower mode
  * - Feedback generation (feedbackEngine)
  * - Demo mode simulation
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { detectBestSide, isPersonDetected as checkPersonDetected } from '../logic/poseAnalysis';
-import { checkLandmarkConfidence, ConfidenceLevel } from '../logic/confidenceCheck';
+import { detectBestSideForExercise, isPersonDetected as checkPersonDetected } from '../logic/poseAnalysis';
+import { checkLandmarkConfidenceByKeys, ConfidenceLevel } from '../logic/confidenceCheck';
 import { calculateAngle, ema } from '../logic/angleCalculation';
 import {
   createStateMachine,
@@ -24,32 +24,44 @@ import { generateFeedback } from '../logic/feedbackEngine';
 import { EXERCISES, DEFAULT_EXERCISE_ID } from '../data/exerciseConfig';
 
 const SMOOTHING_ALPHA = 0.3;
-const DEMO_PERIOD_MS = 4000; // one rep cycle in demo mode
+const DEMO_PERIOD_MS = 4000;
 
 export function useExerciseSession({ config, isActive, isDemoMode }) {
-  const { minTargetAngle = 45, maxTargetAngle = 75, repGoal = 10 } = config || {};
+  const {
+    exerciseId = DEFAULT_EXERCISE_ID,
+    minTargetAngle = 45,
+    maxTargetAngle = 75,
+    repGoal = 10,
+  } = config || {};
 
-  const exerciseDef = EXERCISES[DEFAULT_EXERCISE_ID];
+  const exerciseDef = EXERCISES[exerciseId] || EXERCISES[DEFAULT_EXERCISE_ID];
+  // 'lower' mode for wrist (rest at high angle), 'raise' for leg raise
+  const smMode = exerciseId === 'wrist_flexion' ? 'lower' : 'raise';
 
   // Session state
   const [repCount, setRepCount] = useState(0);
   const [goodReps, setGoodReps] = useState(0);
-  const [angle, setAngle] = useState(0);
-  const [smoothedAngle, setSmoothedAngle] = useState(0);
+  const [angle, setAngle] = useState(smMode === 'lower' ? 170 : 0);
+  const [smoothedAngle, setSmoothedAngle] = useState(smMode === 'lower' ? 170 : 0);
   const [phase, setPhase] = useState(ExercisePhase.REST);
   const [confidence, setConfidence] = useState(ConfidenceLevel.LOW);
   const [confidenceDetails, setConfidenceDetails] = useState(null);
   const [isPersonVisible, setIsPersonVisible] = useState(false);
   const [activeSide, setActiveSide] = useState('left');
-  const [feedback, setFeedback] = useState({ message: 'Position yourself so your full side is visible.', type: 'info' });
+  const [feedback, setFeedback] = useState({
+    message: smMode === 'lower'
+      ? 'Rest your forearm on the table, then curl your hand upward.'
+      : 'Position yourself so your full side is visible.',
+    type: 'info',
+  });
   const [sessionStartTime, setSessionStartTime] = useState(null);
-  const [repHistory, setRepHistory] = useState([]); // { peakAngle, good }[]
+  const [repHistory, setRepHistory] = useState([]);
   const [formStatus, setFormStatus] = useState('READY');
 
   // Refs for mutable values used in callbacks without stale closures
   const smRef = useRef(null);
-  const smoothedAngleRef = useRef(0);
-  const prevAngleRef = useRef(0);
+  const smoothedAngleRef = useRef(smMode === 'lower' ? 170 : 0);
+  const prevAngleRef = useRef(smMode === 'lower' ? 170 : 0);
   const repCountRef = useRef(0);
   const goodRepsRef = useRef(0);
   const repHistoryRef = useRef([]);
@@ -62,8 +74,10 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
       restAngle: exerciseDef.thresholds.restAngle,
       minTargetAngle,
       maxTargetAngle,
+      mode: smMode,
     });
     // Reset session
+    const initAngle = smMode === 'lower' ? 170 : 0;
     setRepCount(0);
     setGoodReps(0);
     setRepHistory([]);
@@ -71,17 +85,19 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
     repCountRef.current = 0;
     goodRepsRef.current = 0;
     repHistoryRef.current = [];
-    smoothedAngleRef.current = 0;
+    smoothedAngleRef.current = initAngle;
+    prevAngleRef.current = initAngle;
+    setAngle(initAngle);
+    setSmoothedAngle(initAngle);
 
     if (isActive && !sessionStartRef.current) {
       sessionStartRef.current = Date.now();
       setSessionStartTime(Date.now());
     }
-  }, [minTargetAngle, maxTargetAngle, isActive]);
+  }, [exerciseId, minTargetAngle, maxTargetAngle, isActive, smMode]);
 
   // Process a raw angle from either real landmarks or demo mode
   const processAngle = useCallback((rawAngle) => {
-    // Smooth angle
     const sa = ema(smoothedAngleRef.current, rawAngle, SMOOTHING_ALPHA);
     smoothedAngleRef.current = sa;
 
@@ -91,7 +107,6 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
     setSmoothedAngle(Math.round(sa * 10) / 10);
     setAngle(Math.round(sa));
 
-    // Update state machine
     if (!smRef.current) return;
     const { repCompleted, formGood, repPeakAngle } = updateStateMachine(
       smRef.current,
@@ -115,9 +130,8 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
       setFormStatus(formGood ? 'GOOD' : 'IMPROVE');
     }
 
-    // Generate feedback
     const fb = generateFeedback({
-      confidence: ConfidenceLevel.HIGH,  // called only when confidence is high
+      confidence: ConfidenceLevel.HIGH,
       phase: smRef.current.phase,
       angle: sa,
       minTarget: minTargetAngle,
@@ -126,9 +140,10 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
       repGoal,
       lastRepGood: formGood,
       movementSpeed: speed,
+      exerciseId,
     });
     setFeedback(fb);
-  }, [minTargetAngle, maxTargetAngle, repGoal]);
+  }, [minTargetAngle, maxTargetAngle, repGoal, exerciseId]);
 
   // Real landmark processing
   const processLandmarks = useCallback((landmarks) => {
@@ -146,13 +161,11 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
 
     setIsPersonVisible(true);
 
-    // Auto-detect best side
-    const best = detectBestSide(landmarks);
+    const best = detectBestSideForExercise(landmarks, exerciseId);
     if (!best) return;
     setActiveSide(best.side);
 
-    // Check confidence
-    const check = checkLandmarkConfidence(best.landmarks);
+    const check = checkLandmarkConfidenceByKeys(best.landmarks);
     setConfidenceDetails(check);
     setConfidence(check.overallConfidence);
 
@@ -164,23 +177,32 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
 
     if (check.overallConfidence === ConfidenceLevel.MEDIUM) {
       setFeedback({ message: check.message, type: 'warning' });
-      // Still process angle at medium confidence but flag it
     }
 
-    // Calculate hip flexion angle: Shoulder → Hip → Knee
-    const { shoulder, hip, knee } = best.landmarks;
-    if (!shoulder || !hip || !knee) return;
-
-    const rawAngle = calculateAngle(
-      { x: shoulder.x, y: shoulder.y },
-      { x: hip.x, y: hip.y },
-      { x: knee.x, y: knee.y }
-    );
+    // Calculate angle based on exercise type
+    let rawAngle;
+    if (exerciseId === 'wrist_flexion') {
+      const { elbow, wrist, index_finger } = best.landmarks;
+      if (!elbow || !wrist || !index_finger) return;
+      rawAngle = calculateAngle(
+        { x: elbow.x, y: elbow.y },
+        { x: wrist.x, y: wrist.y },
+        { x: index_finger.x, y: index_finger.y }
+      );
+    } else {
+      const { shoulder, hip, knee } = best.landmarks;
+      if (!shoulder || !hip || !knee) return;
+      rawAngle = calculateAngle(
+        { x: shoulder.x, y: shoulder.y },
+        { x: hip.x, y: hip.y },
+        { x: knee.x, y: knee.y }
+      );
+    }
 
     processAngle(rawAngle);
-  }, [isActive, isDemoMode, processAngle]);
+  }, [isActive, isDemoMode, exerciseId, processAngle]);
 
-  // Demo mode simulation: sinusoidal angle matching the state machine
+  // Demo mode simulation
   useEffect(() => {
     if (!isDemoMode || !isActive) {
       if (demoTimerRef.current) clearInterval(demoTimerRef.current);
@@ -192,13 +214,24 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
 
     let startTime = Date.now();
 
-    const DEMO_MIN = 0;
-    const DEMO_MAX = (minTargetAngle + maxTargetAngle) / 2;
+    // For wrist: oscillate from restAngle down to midpoint of target range
+    const isLowerMode = smMode === 'lower';
+    const restAngle = exerciseDef.thresholds.restAngle;
+    const midTarget = (minTargetAngle + maxTargetAngle) / 2;
+    const DEMO_REST = isLowerMode ? restAngle : 0;
+    const DEMO_PEAK = isLowerMode ? midTarget : midTarget;
 
     const tick = () => {
       const t = (Date.now() - startTime) / DEMO_PERIOD_MS;
-      // Sinusoidal: 0 → max → 0 
-      const raw = DEMO_MIN + (DEMO_MAX - DEMO_MIN) * Math.max(0, Math.sin(t * Math.PI * 2));
+      const sineVal = Math.max(0, Math.sin(t * Math.PI * 2));
+
+      let raw;
+      if (isLowerMode) {
+        // Oscillate from restAngle DOWN to midTarget and back
+        raw = DEMO_REST - (DEMO_REST - DEMO_PEAK) * sineVal;
+      } else {
+        raw = DEMO_REST + (DEMO_PEAK - DEMO_REST) * sineVal;
+      }
       processAngle(raw);
     };
 
@@ -207,7 +240,7 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
     return () => {
       if (demoTimerRef.current) clearInterval(demoTimerRef.current);
     };
-  }, [isDemoMode, isActive, processAngle, minTargetAngle, maxTargetAngle]);
+  }, [isDemoMode, isActive, processAngle, minTargetAngle, maxTargetAngle, smMode, exerciseDef]);
 
   // Session summary data
   const getSessionData = useCallback(() => {
@@ -220,6 +253,8 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
       : 0;
 
     return {
+      exerciseId,
+      exerciseName: exerciseDef.name,
       repCount: repCountRef.current,
       repGoal,
       goodReps: goodRepsRef.current,
@@ -230,10 +265,11 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
       durationSeconds,
       repHistory: repHistoryRef.current,
     };
-  }, [repGoal, minTargetAngle, maxTargetAngle]);
+  }, [exerciseId, exerciseDef, repGoal, minTargetAngle, maxTargetAngle]);
+
+  const isComplete = repCount >= repGoal && repGoal > 0;
 
   return {
-    // State
     repCount,
     goodReps,
     angle,
@@ -247,7 +283,7 @@ export function useExerciseSession({ config, isActive, isDemoMode }) {
     formStatus,
     repHistory,
     sessionStartTime,
-    // Actions
+    isComplete,
     processLandmarks,
     getSessionData,
   };

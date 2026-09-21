@@ -1,6 +1,6 @@
 /**
  * Navbar.jsx
- * Top navigation bar for MED VISION'26
+ * Top navigation bar for PHYSIOVISION
  */
 
 import { Link, useLocation } from 'react-router-dom';
@@ -22,10 +22,7 @@ export default function Navbar() {
           <div className="w-8 h-8 bg-accent-500 rounded-lg flex items-center justify-center shadow-lg shadow-accent-500/30 group-hover:shadow-accent-500/50 transition-shadow">
             <FiActivity className="w-5 h-5 text-white" />
           </div>
-          <div className="flex flex-col leading-none">
-            <span className="text-sm font-bold text-text-primary tracking-wide">MED VISION</span>
-            <span className="text-[10px] text-accent-400 font-semibold tracking-widest uppercase">'26</span>
-          </div>
+          <span className="text-sm font-bold text-text-primary tracking-wide">PhysioVision</span>
         </Link>
 
         {/* Nav links */}

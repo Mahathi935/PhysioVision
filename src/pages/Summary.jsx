@@ -14,12 +14,23 @@ export default function Summary() {
 
   const data = location.state;
 
-  // Save session on mount
+  // Compute performance level from good rep ratio
+  function computePerformanceLevel(goodReps, repCount) {
+    if (repCount === 0) return 'N/A';
+    const rate = goodReps / repCount;
+    if (rate >= 0.8) return 'Excellent';
+    if (rate >= 0.5) return 'Good';
+    return 'Needs Work';
+  }
+
+  // Save session on mount — always saved, tagged by status
   useEffect(() => {
     if (!data || data.repCount === undefined) return;
+    const performanceLevel = computePerformanceLevel(data.goodReps, data.repCount);
     saveSession({
       date: new Date().toISOString(),
-      exercise: 'Leg Raise',
+      exercise: data.exerciseName || 'Exercise',
+      exerciseId: data.exerciseId || 'unknown',
       repCount: data.repCount,
       repGoal: data.repGoal,
       goodReps: data.goodReps,
@@ -29,6 +40,7 @@ export default function Summary() {
       maxTarget: data.maxTarget,
       durationSeconds: data.durationSeconds,
       status: data.repCount >= data.repGoal ? 'completed' : 'partial',
+      performanceLevel,
       demoMode: data.demoMode || false,
     });
   }, []);
@@ -54,8 +66,10 @@ export default function Summary() {
     maxTarget = 75,
     durationSeconds = 0,
     demoMode = false,
+    exerciseId = 'lying_leg_raise',
   } = data;
 
+  const performanceLevel = computePerformanceLevel(goodReps, repCount);
   const completionPct = Math.round((repCount / repGoal) * 100);
   const goodPct = repCount > 0 ? Math.round((goodReps / repCount) * 100) : 0;
   const needsImprovement = repCount - goodReps;
@@ -68,6 +82,7 @@ export default function Summary() {
     avgAngle,
     minTarget,
     maxTarget,
+    exerciseId,
   });
 
   return (
@@ -84,9 +99,23 @@ export default function Summary() {
               : <FiBarChart2 className="w-6 h-6 text-yellow-400" />
             }
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">Session Complete</h1>
-            <p className="text-text-secondary text-sm">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold text-text-primary">Session Complete</h1>
+              {/* Performance level badge */}
+              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                performanceLevel === 'Excellent'
+                  ? 'bg-accent-500/15 text-accent-300 border-accent-500/30'
+                  : performanceLevel === 'Good'
+                  ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                  : performanceLevel === 'Needs Work'
+                  ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30'
+                  : 'bg-surface-600 text-text-muted border-surface-500'
+              }`}>
+                {performanceLevel}
+              </span>
+            </div>
+            <p className="text-text-secondary text-sm mt-0.5">
               {isComplete ? 'All repetitions completed.' : `${repCount} of ${repGoal} repetitions completed.`}
             </p>
           </div>
@@ -103,7 +132,7 @@ export default function Summary() {
           <div className="flex items-center justify-between">
             <div>
               <p className="section-label mb-1">Exercise</p>
-              <p className="font-semibold text-text-primary">Leg Raise</p>
+              <p className="font-semibold text-text-primary">{data.exerciseName || 'Exercise'}</p>
             </div>
             <div className="text-right">
               <p className="section-label mb-1">Duration</p>
@@ -160,7 +189,9 @@ export default function Summary() {
             <p className="text-3xl font-bold text-accent-400 tabular-nums">
               {avgAngle > 0 ? `${avgAngle}°` : '—'}
             </p>
-            <p className="text-xs text-text-muted mt-1">Hip flexion</p>
+            <p className="text-xs text-text-muted mt-1">
+              {exerciseId === 'wrist_flexion' ? 'Wrist flexion' : 'Hip flexion'}
+            </p>
           </div>
 
           <div className="card p-5">
@@ -172,31 +203,37 @@ export default function Summary() {
           </div>
 
           {/* Target range */}
-          <div className="card p-5 col-span-2">
-            <p className="section-label mb-2">Target Range (Configured)</p>
-            <div className="flex items-center gap-3">
-              <span className="text-xl font-bold text-accent-400">{minTarget}° – {maxTarget}°</span>
-              <div className="flex-1 h-2 bg-surface-600 rounded-full overflow-hidden relative">
-                <div
-                  className="absolute h-full bg-accent-500/30 border-x-2 border-accent-500"
-                  style={{
-                    left: `${(minTarget / 90) * 100}%`,
-                    width: `${((maxTarget - minTarget) / 90) * 100}%`,
-                  }}
-                />
-                {avgAngle > 0 && (
-                  <div
-                    className="absolute h-full w-1 bg-white rounded-full"
-                    style={{ left: `${Math.min(100, (avgAngle / 90) * 100)}%` }}
-                    title={`Avg: ${avgAngle}°`}
-                  />
-                )}
+          {(() => {
+            // Use the full angle scale for the exercise: 180° for wrist, 90° for leg raise
+            const scaleMax = exerciseId === 'wrist_flexion' ? 180 : 90;
+            return (
+              <div className="card p-5 col-span-2">
+                <p className="section-label mb-2">Target Range (Configured)</p>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-bold text-accent-400">{minTarget}° – {maxTarget}°</span>
+                  <div className="flex-1 h-2 bg-surface-600 rounded-full overflow-hidden relative">
+                    <div
+                      className="absolute h-full bg-accent-500/30 border-x-2 border-accent-500"
+                      style={{
+                        left: `${(minTarget / scaleMax) * 100}%`,
+                        width: `${((maxTarget - minTarget) / scaleMax) * 100}%`,
+                      }}
+                    />
+                    {avgAngle > 0 && (
+                      <div
+                        className="absolute h-full w-1 bg-white rounded-full"
+                        style={{ left: `${Math.min(100, (avgAngle / scaleMax) * 100)}%` }}
+                        title={`Avg: ${avgAngle}°`}
+                      />
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-text-muted mt-1.5">
+                  White marker = average peak angle ({avgAngle}°)
+                </p>
               </div>
-            </div>
-            <p className="text-xs text-text-muted mt-1.5">
-              White marker = average peak angle ({avgAngle}°)
-            </p>
-          </div>
+            );
+          })()}
         </div>
 
         {/* AI Feedback */}

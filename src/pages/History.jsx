@@ -22,6 +22,20 @@ function StatusBadge({ status }) {
   );
 }
 
+function PerformanceBadge({ level }) {
+  if (!level || level === 'N/A') return null;
+  const styles = {
+    Excellent: 'bg-accent-500/10 text-accent-300 border-accent-500/25',
+    Good: 'bg-blue-500/10 text-blue-300 border-blue-500/25',
+    'Needs Work': 'bg-yellow-500/10 text-yellow-300 border-yellow-500/25',
+  };
+  return (
+    <span className={`badge border text-[10px] mt-1.5 ${styles[level] || 'bg-surface-600 text-text-muted border-surface-500'}`}>
+      {level}
+    </span>
+  );
+}
+
 export default function History() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState(() => loadSessions());
@@ -84,6 +98,7 @@ export default function History() {
                   {/* Date + status */}
                   <div className="flex-shrink-0">
                     <StatusBadge status={session.status} />
+                    <PerformanceBadge level={session.performanceLevel} />
                     {session.demoMode && (
                       <span className="badge bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 mt-1.5 text-[10px]">
                         DEMO
@@ -94,7 +109,19 @@ export default function History() {
                   {/* Main info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <h3 className="font-semibold text-text-primary">{session.exercise}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-text-primary">{session.exercise}</h3>
+                        {session.exerciseId === 'wrist_flexion' && (
+                          <span className="badge bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]">
+                            WRIST
+                          </span>
+                        )}
+                        {(session.exerciseId === 'lying_leg_raise' || !session.exerciseId) && (
+                          <span className="badge bg-accent-500/10 text-accent-300 border border-accent-500/20 text-[10px]">
+                            LEG
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-text-muted font-medium">
                         {formatDate(session.date)}
                       </span>

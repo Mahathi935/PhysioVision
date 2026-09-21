@@ -24,6 +24,7 @@ import { ExercisePhase } from './exerciseStateMachine';
  * @param {number} params.repGoal - Target rep count
  * @param {boolean} params.lastRepGood - Whether last rep was within target
  * @param {number} params.movementSpeed - Angle change per frame (degrees/frame)
+ * @param {string} [params.exerciseId='lying_leg_raise'] - Exercise identifier for context-aware messages
  * @returns {{ message: string, type: 'info'|'success'|'warning'|'pause' }}
  */
 export function generateFeedback({
@@ -36,7 +37,10 @@ export function generateFeedback({
   repGoal,
   lastRepGood,
   movementSpeed = 0,
+  exerciseId = 'lying_leg_raise',
 }) {
+  const isWrist = exerciseId === 'wrist_flexion';
+
   // SAFETY: Low confidence always pauses evaluation
   if (confidence === ConfidenceLevel.LOW) {
     return {
@@ -60,22 +64,39 @@ export function generateFeedback({
     };
   }
 
-  // Phase-specific feedback
+  // Phase-specific feedback — wrist flexion vs leg raise
   switch (phase) {
     case ExercisePhase.REST:
       if (repCount === 0) {
         return {
-          message: 'Ready. Slowly raise your leg when ready.',
+          message: isWrist
+            ? 'Rest your hand flat on the table, then curl upward when ready.'
+            : 'Ready. Slowly raise your leg when ready.',
           type: 'info',
         };
       }
       return {
-        message: `${repCount} rep${repCount > 1 ? 's' : ''} done. Rest briefly, then raise again.`,
+        message: isWrist
+          ? `${repCount} rep${repCount > 1 ? 's' : ''} done. Rest briefly, then curl again.`
+          : `${repCount} rep${repCount > 1 ? 's' : ''} done. Rest briefly, then raise again.`,
         type: 'info',
       };
 
     case ExercisePhase.RAISING: {
-      // Check movement speed — if too fast, warn
+      // For wrist: RAISING = curling toward peak (angle decreasing)
+      if (isWrist) {
+        if (movementSpeed < -8) {
+          return {
+            message: 'Slow down — curl your wrist in a smooth, controlled motion.',
+            type: 'warning',
+          };
+        }
+        return {
+          message: 'Good. Keep curling your wrist upward steadily.',
+          type: 'info',
+        };
+      }
+      // Leg raise
       if (movementSpeed > 8) {
         return {
           message: 'Slow down and control the movement as you raise.',
@@ -89,6 +110,25 @@ export function generateFeedback({
     }
 
     case ExercisePhase.PEAK: {
+      if (isWrist) {
+        if (angle > maxTarget) {
+          return {
+            message: `Try curling your wrist a little further — target is ${minTarget}°–${maxTarget}°.`,
+            type: 'warning',
+          };
+        }
+        if (angle < minTarget - 10) {
+          return {
+            message: 'Good curl. No need to go further — hold briefly.',
+            type: 'info',
+          };
+        }
+        return {
+          message: `Good wrist flexion at ${Math.round(angle)}°. Hold briefly then return slowly.`,
+          type: 'success',
+        };
+      }
+      // Leg raise
       if (angle < minTarget) {
         return {
           message: `Try raising your leg slightly further — target is ${minTarget}°–${maxTarget}°.`,
@@ -108,6 +148,20 @@ export function generateFeedback({
     }
 
     case ExercisePhase.LOWERING: {
+      // For wrist: LOWERING = returning hand to flat position (angle increasing)
+      if (isWrist) {
+        if (movementSpeed > 8) {
+          return {
+            message: 'Slow down. Return your hand to the flat position in a controlled manner.',
+            type: 'warning',
+          };
+        }
+        return {
+          message: 'Good. Slowly return your hand to the resting position.',
+          type: 'info',
+        };
+      }
+      // Leg raise
       if (movementSpeed < -8) {
         return {
           message: 'Slow down. Lower your leg in a controlled manner.',
@@ -131,9 +185,11 @@ export function generateFeedback({
 /**
  * Generate session summary feedback bullets.
  * @param {Object} sessionData
+ * @param {string} [sessionData.exerciseId='lying_leg_raise']
  * @returns {string[]} Array of feedback bullet strings
  */
-export function generateSummaryFeedback({ repCount, repGoal, goodReps, avgAngle, minTarget, maxTarget }) {
+export function generateSummaryFeedback({ repCount, repGoal, goodReps, avgAngle, minTarget, maxTarget, exerciseId = 'lying_leg_raise' }) {
+  const isWrist = exerciseId === 'wrist_flexion';
   const bullets = [];
 
   if (repCount === 0) {
@@ -156,16 +212,28 @@ export function generateSummaryFeedback({ repCount, repGoal, goodReps, avgAngle,
   } else if (goodRate >= 0.5) {
     bullets.push(`${repCount - goodReps} repetition${repCount - goodReps !== 1 ? 's' : ''} did not reach the configured target range.`);
   } else {
-    bullets.push('Most repetitions were below the configured target range. Try raising the leg further.');
+    bullets.push(isWrist
+      ? 'Most repetitions did not reach the target wrist flexion range. Try curling your hand further.'
+      : 'Most repetitions were below the configured target range. Try raising the leg further.');
   }
 
   if (avgAngle > 0) {
-    if (avgAngle < minTarget) {
-      bullets.push('Average angle was below the target range. Focus on full range of motion.');
-    } else if (avgAngle > maxTarget + 15) {
-      bullets.push('Average angle was above the typical target range — ensure controlled movement.');
+    if (isWrist) {
+      if (avgAngle > maxTarget) {
+        bullets.push('Average wrist angle was above the target range. Aim for a deeper curl.');
+      } else if (avgAngle < minTarget - 15) {
+        bullets.push('Average wrist angle was well within the target range — well controlled.');
+      } else {
+        bullets.push('Maintain a smooth, controlled curl and return motion each repetition.');
+      }
     } else {
-      bullets.push('Maintain controlled movement speed throughout each repetition.');
+      if (avgAngle < minTarget) {
+        bullets.push('Average angle was below the target range. Focus on full range of motion.');
+      } else if (avgAngle > maxTarget + 15) {
+        bullets.push('Average angle was above the typical target range — ensure controlled movement.');
+      } else {
+        bullets.push('Maintain controlled movement speed throughout each repetition.');
+      }
     }
   }
 

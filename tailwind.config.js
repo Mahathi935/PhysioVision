@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // MED VISION teal/cyan accent palette
+        // PHYSIOVISION teal/cyan accent palette
         accent: {
           50:  '#f0fdfc',
           100: '#ccfbf8',
