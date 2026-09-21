@@ -44,7 +44,11 @@ export function loadSessions() {
 export function saveSession(session) {
   try {
     const sessions = loadSessions();
-    sessions.unshift({ ...session, id: generateId() }); // newest first
+    const id = session.id || generateId();
+    // Idempotent: a session that is already stored is never saved a second time
+    // (guards against React StrictMode double-effects, page reloads, back/forward).
+    if (sessions.some((s) => s.id === id)) return true;
+    sessions.unshift({ ...session, id }); // newest first
     // Keep last 50 sessions
     const trimmed = sessions.slice(0, 50);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
@@ -63,6 +67,15 @@ export function clearSessions() {
 
 function generateId() {
   return `session_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Create a unique id for a session. Generated once when the exercise session
+ * starts and carried through to the summary, so the same session can only be
+ * stored once.
+ */
+export function createSessionId() {
+  return generateId();
 }
 
 /**

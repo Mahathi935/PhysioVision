@@ -1,19 +1,20 @@
 /**
- * CameraCheck.jsx — Camera and landmark visibility check with auto-calibration countdown
+ * CameraCheck.jsx — Step 3 of 3: camera calibration
  *
- * When the user clicks "Start Exercise →" a 5-second countdown overlay appears
- * so they can get into position. The session starts automatically at 0.
+ * Runs AFTER the guidelines page. Verifies the person and all required landmarks
+ * are visible (with spoken repositioning guidance), then "Start Exercise" goes
+ * straight to the live session — there is no countdown.
  */
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiCheck, FiX, FiChevronLeft, FiRefreshCw, FiAlertTriangle, FiPlay } from 'react-icons/fi';
 import { useMediaPipe, MediaPipeStatus } from '../hooks/useMediaPipe';
 import { detectBestSideForExercise, isPersonDetected } from '../logic/poseAnalysis';
 import { checkLandmarkConfidenceByKeys, VisibilityLevel, ConfidenceLevel } from '../logic/confidenceCheck';
+import { useSpokenFeedback, useVoicePreference } from '../hooks/useSpokenFeedback';
 import CameraView from '../components/CameraView';
-
-const COUNTDOWN_SECONDS = 5;
+import VoiceToggle from '../components/VoiceToggle';
 
 function LandmarkStatusRow({ name, level }) {
   const isVisible = level === VisibilityLevel.HIGH || level === VisibilityLevel.MEDIUM;
@@ -59,10 +60,6 @@ export default function CameraCheck({ config }) {
   const [activeSide, setActiveSide] = useState('left');
   const [personDetected, setPersonDetected] = useState(false);
 
-  // Countdown state
-  const [countdown, setCountdown] = useState(null); // null = not started
-  const countdownRef = useRef(null);
-
   const exerciseId = config?.exerciseId || 'lying_leg_raise';
   const exerciseName = config?.exerciseName || 'Exercise';
 
@@ -97,48 +94,24 @@ export default function CameraCheck({ config }) {
   const isReady =
     confidenceData?.overallConfidence === ConfidenceLevel.HIGH && personDetected;
 
-  // ── Countdown logic ──────────────────────────────────────────────────────
-  const startCountdown = useCallback(() => {
-    setCountdown(COUNTDOWN_SECONDS);
-  }, []);
+  // ── Voice guidance ───────────────────────────────────────────────────────
+  // Read the repositioning hints aloud so they can be followed from a distance.
+  const [voiceEnabled, setVoiceEnabled] = useVoicePreference();
 
-  const cancelCountdown = useCallback(() => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setCountdown(null);
-  }, []);
-
-  useEffect(() => {
-    if (countdown === null) return;
-
-    if (countdown === 0) {
-      navigate('/instructions');
-      return;
+  let voiceFeedback = null;
+  if (status === MediaPipeStatus.RUNNING && !isDemoMode) {
+    if (!personDetected) {
+      voiceFeedback = { message: 'I cannot see you. Please step into the camera frame.', type: 'warning' };
+    } else if (isReady) {
+      voiceFeedback = { message: 'Position confirmed. You are ready to start the exercise.', type: 'success' };
+    } else {
+      voiceFeedback = { message: confidenceData?.message || 'Please adjust your position.', type: 'warning' };
     }
-
-    countdownRef.current = setTimeout(() => {
-      setCountdown((c) => c - 1);
-    }, 1000);
-
-    return () => clearTimeout(countdownRef.current);
-  }, [countdown, navigate]);
-
-  // Cancel countdown on Escape
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') cancelCountdown(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [cancelCountdown]);
+  }
+  useSpokenFeedback(voiceFeedback, { enabled: voiceEnabled });
 
   // ── Status info ──────────────────────────────────────────────────────────
   const statusInfo = (() => {
-    if (countdown !== null) {
-      return {
-        label: 'GET READY',
-        message: `Starting in ${countdown}s — get into position!`,
-        color: 'text-accent-400',
-        bg: 'bg-accent-500/10 border-accent-500/20',
-      };
-    }
     if (status === MediaPipeStatus.LOADING_MODEL) {
       return {
         label: 'LOADING',
@@ -200,19 +173,23 @@ export default function CameraCheck({ config }) {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 animate-fade-in">
 
         <button
-          onClick={() => navigate('/setup')}
+          onClick={() => navigate('/instructions')}
           className="flex items-center gap-2 text-text-secondary hover:text-text-primary text-sm mb-6 transition-colors"
         >
           <FiChevronLeft className="w-4 h-4" />
-          Back to Setup
+          Back to Guidelines
         </button>
 
-        <div className="mb-6">
-          <span className="section-label block mb-2">Step 2 of 3</span>
-          <h1 className="text-3xl font-bold text-text-primary">Camera Check</h1>
-          <p className="text-text-secondary mt-2">
-            Verify all required landmarks are visible, then the session starts automatically after a countdown.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <span className="section-label block mb-2">Step 3 of 3 — Calibration</span>
+            <h1 className="text-3xl font-bold text-text-primary">Camera Check</h1>
+            <p className="text-text-secondary mt-2">
+              Position yourself as described in the guidelines and follow the spoken hints until all landmarks are
+              visible, then start the exercise.
+            </p>
+          </div>
+          <VoiceToggle enabled={voiceEnabled} onToggle={() => setVoiceEnabled(!voiceEnabled)} className="flex-shrink-0" />
         </div>
 
         <div className="grid md:grid-cols-5 gap-5">
@@ -228,29 +205,9 @@ export default function CameraCheck({ config }) {
               demoMode={isDemoMode}
             />
 
-            {/* Countdown overlay */}
-            {countdown !== null && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 rounded-xl">
-                <p className="text-white/80 text-sm font-medium mb-2 uppercase tracking-wider">
-                  Starting {exerciseName}
-                </p>
-                <div className="text-8xl font-bold text-accent-400 tabular-nums leading-none drop-shadow-lg">
-                  {countdown === 0 ? 'GO!' : countdown}
-                </div>
-                <p className="text-white/60 text-xs mt-4">Get into position</p>
-                <button
-                  onClick={cancelCountdown}
-                  className="mt-4 text-xs text-white/50 hover:text-white/80 transition-colors underline"
-                >
-                  Cancel (Esc)
-                </button>
-              </div>
-            )}
-
             {/* Status message */}
             <div className={`mt-3 p-3 rounded-xl border ${statusInfo.bg} flex items-center gap-3`}>
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                countdown !== null ? 'bg-accent-400 animate-pulse' :
                 isReady ? 'bg-accent-400' :
                 status === MediaPipeStatus.ERROR ? 'bg-red-400' :
                 'bg-yellow-400 animate-pulse'
@@ -349,36 +306,25 @@ export default function CameraCheck({ config }) {
               </div>
             </div>
 
-            {/* Start button — triggers countdown */}
-            {countdown === null ? (
-              <button
-                onClick={() => {
-                  if (isReady || isDemoMode) startCountdown();
-                }}
-                disabled={!isReady && !isDemoMode}
-                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <FiPlay className="w-4 h-4" />
-                {isDemoMode ? 'Start (Demo Mode)' : 'Start Exercise →'}
-              </button>
-            ) : (
-              <button
-                onClick={cancelCountdown}
-                className="btn-secondary w-full flex items-center justify-center gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
-              >
-                Cancel Countdown
-              </button>
-            )}
+            {/* Start button — goes straight to the live session (no countdown) */}
+            <button
+              onClick={() => navigate('/session')}
+              disabled={!isReady && !isDemoMode}
+              className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <FiPlay className="w-4 h-4" />
+              {isDemoMode ? 'Start (Demo Mode)' : 'Start Exercise →'}
+            </button>
 
-            {!isReady && !isDemoMode && status === MediaPipeStatus.RUNNING && countdown === null && (
+            {!isReady && !isDemoMode && status === MediaPipeStatus.RUNNING && (
               <p className="text-xs text-text-muted text-center">
                 Adjust camera until all landmarks show as visible
               </p>
             )}
 
-            {isReady && countdown === null && (
+            {isReady && (
               <p className="text-xs text-accent-400/80 text-center">
-                ✓ Position confirmed — click Start to begin the {COUNTDOWN_SECONDS}s countdown
+                ✓ Position confirmed — click Start Exercise to begin
               </p>
             )}
           </div>

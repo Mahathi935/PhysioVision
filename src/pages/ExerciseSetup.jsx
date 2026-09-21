@@ -43,7 +43,7 @@ export default function ExerciseSetup({ config, setConfig, selectedExerciseId, s
       maxTargetAngle: localMax,
       repGoal: localReps,
     });
-    navigate('/camera-check');
+    navigate('/instructions');
   };
 
   const resetDefaults = () => {
@@ -261,8 +261,8 @@ export default function ExerciseSetup({ config, setConfig, selectedExerciseId, s
           onClick={handleStart}
           className="btn-primary w-full flex items-center justify-center gap-2 text-base"
         >
-          <FiCamera className="w-5 h-5" />
-          Check Camera →
+          <FiInfo className="w-5 h-5" />
+          Continue to Guidelines →
         </button>
 
       </div>

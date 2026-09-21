@@ -15,8 +15,10 @@ import { useMediaPipe, MediaPipeStatus } from '../hooks/useMediaPipe';
 import { useExerciseSession } from '../hooks/useExerciseSession';
 import { ExercisePhase } from '../logic/exerciseStateMachine';
 import { ConfidenceLevel } from '../logic/confidenceCheck';
-import { formatDuration } from '../utils/storage';
+import { formatDuration, createSessionId } from '../utils/storage';
+import { useSpokenFeedback, useVoicePreference, isSpeechSupported } from '../hooks/useSpokenFeedback';
 import CameraView from '../components/CameraView';
+import VoiceToggle from '../components/VoiceToggle';
 
 const PHASE_LABELS = {
   [ExercisePhase.REST]: 'REST',
@@ -61,6 +63,9 @@ export default function ExerciseSession({ config }) {
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef(null);
   const timerRef = useRef(null);
+  // One id per exercise session — the summary uses it so the session is stored only once
+  const sessionIdRef = useRef(null);
+  if (sessionIdRef.current === null) sessionIdRef.current = createSessionId();
 
   const {
     status,
@@ -93,13 +98,19 @@ export default function ExerciseSession({ config }) {
     isDemoMode,
   });
 
-  // Auto-stop: when all reps are done, wait 1.5 s then navigate to summary
+  // Spoken guidance — reads the on-screen feedback aloud (useful when standing away from the screen)
+  const [voiceEnabled, setVoiceEnabled] = useVoicePreference();
+  const voiceActive = voiceEnabled && isSpeechSupported();
+  useSpokenFeedback(feedback, { enabled: voiceEnabled && sessionActive });
+
+  // Auto-stop: when all reps are done, wait then navigate to summary.
+  // With voice on, wait a little longer so "Exercise complete…" can be heard.
   const autoStopRef = useRef(null);
   useEffect(() => {
     if (isComplete && sessionActive && !autoStopRef.current) {
       autoStopRef.current = setTimeout(() => {
         handleEndSession();
-      }, 1500);
+      }, voiceActive ? 4000 : 1500);
     }
     return () => {
       if (autoStopRef.current) {
@@ -140,6 +151,7 @@ export default function ExerciseSession({ config }) {
     navigate('/summary', {
       state: {
         ...data,
+        sessionId: sessionIdRef.current,
         durationSeconds: elapsed,
         demoMode: isDemoMode,
       },
@@ -175,6 +187,9 @@ export default function ExerciseSession({ config }) {
           <div className="font-mono text-xl font-bold text-text-primary tabular-nums">
             {formatDuration(elapsed)}
           </div>
+
+          {/* Voice guidance on/off */}
+          <VoiceToggle enabled={voiceEnabled} onToggle={() => setVoiceEnabled(!voiceEnabled)} />
 
           {/* End session */}
           <button

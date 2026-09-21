@@ -3,7 +3,7 @@
  */
 
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { FiHome, FiClock, FiCheck, FiAlertCircle, FiTrendingUp, FiBarChart2 } from 'react-icons/fi';
 import { saveSession, formatDuration } from '../utils/storage';
 import { generateSummaryFeedback } from '../logic/feedbackEngine';
@@ -13,6 +13,7 @@ export default function Summary() {
   const navigate = useNavigate();
 
   const data = location.state;
+  const savedRef = useRef(false);
 
   // Compute performance level from good rep ratio
   function computePerformanceLevel(goodReps, repCount) {
@@ -26,8 +27,12 @@ export default function Summary() {
   // Save session on mount — always saved, tagged by status
   useEffect(() => {
     if (!data || data.repCount === undefined) return;
+    // Save exactly once per session (StrictMode runs effects twice in development)
+    if (savedRef.current) return;
+    savedRef.current = true;
     const performanceLevel = computePerformanceLevel(data.goodReps, data.repCount);
     saveSession({
+      id: data.sessionId, // same id => storage refuses a second copy
       date: new Date().toISOString(),
       exercise: data.exerciseName || 'Exercise',
       exerciseId: data.exerciseId || 'unknown',

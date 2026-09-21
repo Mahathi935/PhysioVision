@@ -1,12 +1,13 @@
 /**
  * ExerciseInstructions.jsx — Pre-exercise positioning & movement guide
  *
- * Shown between camera check and the live session.
- * Helps the user set up correctly before the AI starts tracking.
+ * Step 2 of 3 — shown right after setup and BEFORE camera calibration.
+ * Explains how to position and perform the exercise; the user then calibrates
+ * the camera (step 3) and starts the exercise from there.
  */
 
 import { useNavigate } from 'react-router-dom';
-import { FiChevronLeft, FiPlay, FiTarget, FiUser } from 'react-icons/fi';
+import { FiChevronLeft, FiCamera, FiTarget, FiUser } from 'react-icons/fi';
 import { EXERCISES, DEFAULT_EXERCISE_ID } from '../data/exerciseConfig';
 
 export default function ExerciseInstructions({ config }) {
@@ -24,15 +25,15 @@ export default function ExerciseInstructions({ config }) {
 
         {/* Back */}
         <button
-          onClick={() => navigate('/camera-check')}
+          onClick={() => navigate('/setup')}
           className="flex items-center gap-2 text-text-secondary hover:text-text-primary text-sm mb-6 transition-colors"
         >
           <FiChevronLeft className="w-4 h-4" />
-          Back to Camera Check
+          Back to Setup
         </button>
 
         <div className="mb-6">
-          <span className="section-label block mb-2">Step 3 of 3 — Before You Begin</span>
+          <span className="section-label block mb-2">Step 2 of 3 — Guidelines</span>
           <h1 className="text-3xl font-bold text-text-primary">{exercise.name}</h1>
           <p className="text-text-secondary mt-2 leading-relaxed">{exercise.description}</p>
         </div>
@@ -108,11 +109,11 @@ export default function ExerciseInstructions({ config }) {
 
         {/* CTA */}
         <button
-          onClick={() => navigate('/session')}
+          onClick={() => navigate('/camera-check')}
           className="btn-primary w-full flex items-center justify-center gap-2 text-base"
         >
-          <FiPlay className="w-5 h-5" />
-          I'm Ready — Start Exercise
+          <FiCamera className="w-5 h-5" />
+          I've Read the Guidelines — Calibrate Camera →
         </button>
 
       </div>
