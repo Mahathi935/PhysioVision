@@ -2,9 +2,22 @@
  * storage.js
  * localStorage utilities for session history.
  * Simple, no-backend storage for demo sessions.
+ * History is namespaced per logged-in user, so each account only ever
+ * sees its own sessions.
  */
 
-const STORAGE_KEY = 'med_vision_sessions';
+import { getCurrentUser } from './auth';
+
+const STORAGE_KEY_PREFIX = 'med_vision_sessions';
+
+/**
+ * Build the storage key for the current user (or a shared "guest" bucket
+ * if somehow called with nobody logged in).
+ */
+function getStorageKey() {
+  const user = getCurrentUser();
+  return user ? `${STORAGE_KEY_PREFIX}_${user.id}` : `${STORAGE_KEY_PREFIX}_guest`;
+}
 
 /**
  * @typedef {Object} SessionRecord
@@ -29,7 +42,7 @@ const STORAGE_KEY = 'med_vision_sessions';
  */
 export function loadSessions() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey());
     if (!raw) return [];
     return JSON.parse(raw);
   } catch {
@@ -51,7 +64,7 @@ export function saveSession(session) {
     sessions.unshift({ ...session, id }); // newest first
     // Keep last 50 sessions
     const trimmed = sessions.slice(0, 50);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    localStorage.setItem(getStorageKey(), JSON.stringify(trimmed));
     return true;
   } catch {
     return false;
@@ -59,10 +72,10 @@ export function saveSession(session) {
 }
 
 /**
- * Clear all session history.
+ * Clear all session history for the current user.
  */
 export function clearSessions() {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(getStorageKey());
 }
 
 function generateId() {

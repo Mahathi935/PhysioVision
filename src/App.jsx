@@ -5,6 +5,9 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Layout/Navbar';
+import RequireAuth from './components/RequireAuth';
+import { AuthProvider } from './context/AuthContext';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ExerciseSetup from './pages/ExerciseSetup';
 import CameraCheck from './pages/CameraCheck';
@@ -30,30 +33,74 @@ export default function App() {
   });
 
   return (
-    <BrowserRouter>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route
-          path="/setup"
-          element={
-            <ExerciseSetup
-              config={config}
-              setConfig={setConfig}
-              selectedExerciseId={selectedExerciseId}
-              setSelectedExerciseId={setSelectedExerciseId}
-            />
-          }
-        />
-        <Route path="/camera-check" element={<CameraCheck config={config} />} />
-        <Route path="/instructions" element={<ExerciseInstructions config={config} />} />
-        <Route
-          path="/session"
-          element={<ExerciseSession config={config} />}
-        />
-        <Route path="/summary" element={<Summary />} />
-        <Route path="/history" element={<History />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Navbar />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/setup"
+            element={
+              <RequireAuth>
+                <ExerciseSetup
+                  config={config}
+                  setConfig={setConfig}
+                  selectedExerciseId={selectedExerciseId}
+                  setSelectedExerciseId={setSelectedExerciseId}
+                />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/camera-check"
+            element={
+              <RequireAuth>
+                <CameraCheck config={config} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/instructions"
+            element={
+              <RequireAuth>
+                <ExerciseInstructions config={config} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/session"
+            element={
+              <RequireAuth>
+                <ExerciseSession config={config} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/summary"
+            element={
+              <RequireAuth>
+                <Summary />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <RequireAuth>
+                <History />
+              </RequireAuth>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
