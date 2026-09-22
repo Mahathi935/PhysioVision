@@ -63,6 +63,7 @@ export default function ExerciseSession({ config }) {
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef(null);
   const timerRef = useRef(null);
+  const timerStartedRef = useRef(false);
   // One id per exercise session — the summary uses it so the session is stored only once
   const sessionIdRef = useRef(null);
   if (sessionIdRef.current === null) sessionIdRef.current = createSessionId();
@@ -126,8 +127,9 @@ export default function ExerciseSession({ config }) {
   useEffect(() => {
     if (
       (status === MediaPipeStatus.RUNNING || isDemoMode) &&
-      !sessionActive
+      !timerStartedRef.current
     ) {
+      timerStartedRef.current = true;
       setSessionActive(true);
       startTimeRef.current = Date.now();
       timerRef.current = setInterval(() => {
@@ -137,7 +139,7 @@ export default function ExerciseSession({ config }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [status, isDemoMode, sessionActive]);
+  }, [status, isDemoMode]);
 
   // Route landmarks to exercise session
   useEffect(() => {
